@@ -9,6 +9,7 @@ chat_id) są wczytywane z "sekretów" ustawionych w GitHub (patrz README.md).
 
 import os
 import sys
+import time
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -27,11 +28,19 @@ def get_page_text():
         browser = p.chromium.launch()
         page = browser.new_page()
         page.goto(PAGE_URL, timeout=30000)
-        # Czekamy chwilę, aż widget JS doładuje terminy
-        page.wait_for_timeout(5000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            pass
+        page.wait_for_timeout(8000)
         text = page.inner_text("body")
         browser.close()
         return text
+
+
+def check_current_state():
+    text = get_page_text()
+    return "unavailable" if TEXT_WHEN_NO_SLOTS in text.lower() else "available"
 
 
 def read_previous_state():
@@ -56,19 +65,28 @@ def send_telegram_message(text):
 
 
 def main():
-    page_text = get_page_text()
-    current_state = "unavailable" if TEXT_WHEN_NO_SLOTS in page_text.lower() else "available"
     previous_state = read_previous_state()
+    current_state = check_current_state()
 
-    print(f"Poprzedni stan: {previous_state} | Aktualny stan: {current_state}")
+    print(f"Poprzedni stan: {previous_state} | Pierwsze sprawdzenie: {current_state}")
 
     if current_state == "available" and previous_state == "unavailable":
-        send_telegram_message(
-            "🎾 Pojawił się nowy termin na zajęcia Cetaphil x Deski!\n"
-            "Wejdź szybko i zapisz się:\n"
-            "https://zapisy.activenow.pl/zajecia-cetaphil-x-deski-zapisy/"
-        )
-        print("Wysłano powiadomienie!")
+        print("Wygląda na dostępny termin - potwierdzam drugim sprawdzeniem za 15 sekund...")
+        time.sleep(15)
+        confirm_state = check_current_state()
+        print(f"Drugie sprawdzenie: {confirm_state}")
+
+        if confirm_state == "available":
+            send_telegram_message(
+                "🎾 Pojawił się nowy termin na zajęcia Cetaphil x Deski!\n"
+                "Wejdź szybko i zapisz się:\n"
+                "https://zapisy.activenow.pl/zajecia-cetaphil-x-deski-zapisy/"
+            )
+            print("Potwierdzone - wysłano powiadomienie!")
+            current_state = "available"
+        else:
+            print("Fałszywy alarm - drugie sprawdzenie pokazało brak terminów. Nie wysyłam powiadomienia.")
+            current_state = "unavailable"
 
     write_state(current_state)
 
