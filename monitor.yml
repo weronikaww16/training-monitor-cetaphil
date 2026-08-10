@@ -2,14 +2,15 @@ name: Monitor terminow treningow
 
 on:
   schedule:
-    # Uruchamia się co 15 minut, całą dobę
+    # Domyślnie: co 15 minut, cały czas
     - cron: "*/15 * * * *"
+    # Dodatkowo: co 3 minuty w poniedziałki 8:00-12:00 czasu polskiego
+    # (6:00-10:00 UTC - czas letni, UTC+2)
+    - cron: "*/3 6-9 * * 1"
   workflow_dispatch: {}
-    # ^ to pozwala też uruchomić ręcznie przyciskiem "Run workflow" na GitHubie
 
 permissions:
   contents: write
-  # ^ potrzebne, żeby agent mógł zapisać sobie "pamięć" (state.txt) między uruchomieniami
 
 jobs:
   check:
@@ -40,4 +41,5 @@ jobs:
           git config user.email "actions@github.com"
           git add state.txt
           git diff --quiet && git diff --staged --quiet || git commit -m "Aktualizacja stanu"
+          git pull --rebase
           git push
