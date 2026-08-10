@@ -1,0 +1,43 @@
+name: Monitor terminow treningow
+
+on:
+  schedule:
+    # Uruchamia się co 15 minut, całą dobę
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+    # ^ to pozwala też uruchomić ręcznie przyciskiem "Run workflow" na GitHubie
+
+permissions:
+  contents: write
+  # ^ potrzebne, żeby agent mógł zapisać sobie "pamięć" (state.txt) między uruchomieniami
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pobierz pliki repozytorium
+        uses: actions/checkout@v4
+
+      - name: Zainstaluj Pythona
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Zainstaluj wymagane biblioteki
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Uruchom sprawdzenie strony
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python monitor.py
+
+      - name: Zapisz nowy stan z powrotem do repozytorium
+        run: |
+          git config user.name "training-monitor-bot"
+          git config user.email "actions@github.com"
+          git add state.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "Aktualizacja stanu"
+          git push
